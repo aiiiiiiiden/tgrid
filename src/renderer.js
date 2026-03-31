@@ -13,37 +13,122 @@ let assignments = {};
 let presetImageCache = {}; // path -> dataUrl
 let openDropdown = null; // track currently open dropdown
 let shiftDetected = false; // for session restore bypass
+let resizeListenerRegistered = false;
+
+const DEFAULT_OPACITY = 0.3;
+const ACTIVE_OPACITY = 0.5;
+
+const PRESET_COLORS = [
+  { value: null, label: 'None' },
+  { value: '#f87171', label: 'Red' },
+  { value: '#fb923c', label: 'Orange' },
+  { value: '#fbbf24', label: 'Yellow' },
+  { value: '#4ade80', label: 'Green' },
+  { value: '#67e8f9', label: 'Cyan' },
+  { value: '#60a5fa', label: 'Blue' },
+  { value: '#c084fc', label: 'Purple' },
+  { value: '#f472b6', label: 'Pink' }
+];
+
+const LIGHT_PRESET_COLORS = [
+  { value: null, label: 'None' },
+  { value: '#dc2626', label: 'Red' },
+  { value: '#ea580c', label: 'Orange' },
+  { value: '#a16207', label: 'Yellow' },
+  { value: '#15803d', label: 'Green' },
+  { value: '#0891b2', label: 'Cyan' },
+  { value: '#2563eb', label: 'Blue' },
+  { value: '#7c3aed', label: 'Purple' },
+  { value: '#db2777', label: 'Pink' }
+];
+
+function getPresetColors() {
+  return currentTheme === 'light' ? LIGHT_PRESET_COLORS : PRESET_COLORS;
+}
+
+function getDisplayColor(storedColor) {
+  if (!storedColor) return null;
+  const darkIdx = PRESET_COLORS.findIndex(c => c.value === storedColor);
+  if (darkIdx < 0) return storedColor;
+  const colors = getPresetColors();
+  return colors[darkIdx] ? colors[darkIdx].value : storedColor;
+}
+
+const DARK_TERM_THEME = {
+  background: '#141414',
+  foreground: '#cccccc',
+  cursor: '#4ade80',
+  cursorAccent: '#141414',
+  selectionBackground: 'rgba(74, 222, 128, 0.2)',
+  black: '#141414',
+  red: '#f87171',
+  green: '#4ade80',
+  yellow: '#fbbf24',
+  blue: '#60a5fa',
+  magenta: '#c084fc',
+  cyan: '#67e8f9',
+  white: '#cccccc',
+  brightBlack: '#4e4e4e',
+  brightRed: '#fca5a5',
+  brightGreen: '#86efac',
+  brightYellow: '#fcd34d',
+  brightBlue: '#93c5fd',
+  brightMagenta: '#d8b4fe',
+  brightCyan: '#a5f3fc',
+  brightWhite: '#e5e5e5'
+};
+
+const LIGHT_TERM_THEME = {
+  background: '#fafafa',
+  foreground: '#3e3e3e',
+  cursor: '#15803d',
+  cursorAccent: '#fafafa',
+  selectionBackground: 'rgba(21, 128, 61, 0.15)',
+  black: '#3e3e3e',
+  red: '#dc2626',
+  green: '#15803d',
+  yellow: '#ca8a04',
+  blue: '#2563eb',
+  magenta: '#9333ea',
+  cyan: '#0891b2',
+  white: '#eaeaea',
+  brightBlack: '#808080',
+  brightRed: '#ef4444',
+  brightGreen: '#22c55e',
+  brightYellow: '#eab308',
+  brightBlue: '#3b82f6',
+  brightMagenta: '#a855f7',
+  brightCyan: '#06b6d4',
+  brightWhite: '#f2f2f2'
+};
+
+let currentTheme = 'dark';
 
 const TERM_OPTIONS = {
   fontSize: 13,
   fontFamily: "'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace",
-  theme: {
-    background: '#0d0d14',
-    foreground: '#c8c8d0',
-    cursor: '#00d4ff',
-    cursorAccent: '#0d0d14',
-    selectionBackground: 'rgba(0, 212, 255, 0.2)',
-    black: '#0d0d14',
-    red: '#ff5555',
-    green: '#4ade80',
-    yellow: '#facc15',
-    blue: '#60a5fa',
-    magenta: '#a78bfa',
-    cyan: '#00d4ff',
-    white: '#c8c8d0',
-    brightBlack: '#555555',
-    brightRed: '#ff6e6e',
-    brightGreen: '#69db7c',
-    brightYellow: '#fdd835',
-    brightBlue: '#74b9ff',
-    brightMagenta: '#b794f6',
-    brightCyan: '#22d3ee',
-    brightWhite: '#e0e0e8'
-  },
+  theme: DARK_TERM_THEME,
   allowTransparency: true,
   cursorBlink: true,
   scrollback: 5000
 };
+
+// ── Resize listener (guarded to prevent duplicate registration) ──
+
+function setupResizeListener() {
+  if (resizeListenerRegistered) return;
+  resizeListenerRegistered = true;
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      closeAllDropdowns();
+      panels.forEach(p => {
+        try { p.fitAddon.fit(); } catch(e) {}
+      });
+    }, 100);
+  });
+}
 
 // ── Dropdown helpers ──
 
@@ -58,6 +143,7 @@ function createDropdown(anchorEl, items, options = {}) {
   closeAllDropdowns();
   const dd = document.createElement('div');
   dd.className = 'dropdown';
+  dd.setAttribute('role', 'menu');
 
   items.forEach(item => {
     if (item.separator) {
@@ -70,18 +156,28 @@ function createDropdown(anchorEl, items, options = {}) {
       const el = document.createElement('div');
       el.className = 'dropdown-action';
       el.textContent = item.label;
+      el.setAttribute('role', 'menuitem');
+      el.tabIndex = -1;
       el.addEventListener('click', (e) => { e.stopPropagation(); closeAllDropdowns(); item.action(); });
       dd.appendChild(el);
       return;
     }
     const el = document.createElement('div');
     el.className = 'dropdown-item' + (item.active ? ' active' : '');
+    el.setAttribute('role', 'menuitem');
+    el.tabIndex = -1;
 
     if (item.check !== undefined) {
       const check = document.createElement('span');
       check.className = 'check';
       check.textContent = item.check ? '✓' : '';
       el.appendChild(check);
+    }
+    if (item.color) {
+      const dot = document.createElement('span');
+      dot.className = 'preset-color-dot';
+      dot.style.background = item.color;
+      el.appendChild(dot);
     }
     if (item.imgSrc) {
       const img = document.createElement('img');
@@ -110,7 +206,34 @@ function createDropdown(anchorEl, items, options = {}) {
   dd.style.top = `${rect.bottom + 4}px`;
   dd.style.left = `${rect.left}px`;
 
-  // Clamp to viewport
+  // Keyboard navigation
+  dd.tabIndex = -1;
+  let focusedIdx = -1;
+  const focusableItems = Array.from(dd.querySelectorAll('.dropdown-item, .dropdown-action'));
+
+  function setFocusedItem(idx) {
+    focusableItems.forEach(el => el.classList.remove('focused'));
+    if (idx >= 0 && idx < focusableItems.length) {
+      focusedIdx = idx;
+      focusableItems[idx].classList.add('focused');
+      focusableItems[idx].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  dd.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedItem(focusedIdx < focusableItems.length - 1 ? focusedIdx + 1 : 0);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedItem(focusedIdx > 0 ? focusedIdx - 1 : focusableItems.length - 1);
+    } else if (e.key === 'Enter' && focusedIdx >= 0) {
+      e.preventDefault();
+      focusableItems[focusedIdx].click();
+    }
+  });
+
+  // Clamp to viewport, then focus dropdown and first item
   requestAnimationFrame(() => {
     const ddRect = dd.getBoundingClientRect();
     if (ddRect.right > window.innerWidth) {
@@ -119,6 +242,8 @@ function createDropdown(anchorEl, items, options = {}) {
     if (ddRect.bottom > window.innerHeight) {
       dd.style.top = `${rect.top - ddRect.height - 4}px`;
     }
+    dd.focus();
+    if (focusableItems.length > 0) setFocusedItem(0);
   });
 
   openDropdown = dd;
@@ -284,7 +409,7 @@ function showGridResizeDropdown(anchorEl) {
 
   const info = document.createElement('div');
   info.className = 'grid-resize-info';
-  info.innerHTML = `<span style="color:#00d4ff">${gridRows} × ${gridCols}</span>`;
+  info.innerHTML = `<span class="accent-text">${gridRows} × ${gridCols}</span>`;
 
   function updateCells(rows, cols) {
     cells.forEach(cell => {
@@ -298,9 +423,9 @@ function showGridResizeDropdown(anchorEl) {
       }
     });
     if (rows > 0 && cols > 0) {
-      info.innerHTML = `<span style="color:#00d4ff">${rows} × ${cols}</span>  ·  ${rows * cols} agents`;
+      info.innerHTML = `<span class="accent-text">${rows} × ${cols}</span>  ·  ${rows * cols} agents`;
     } else {
-      info.innerHTML = `<span style="color:#00d4ff">${gridRows} × ${gridCols}</span>`;
+      info.innerHTML = `<span class="accent-text">${gridRows} × ${gridCols}</span>`;
     }
   }
 
@@ -357,7 +482,10 @@ async function rebuildGrid(newRows, newCols) {
 
   if (newTotal < oldTotal) {
     const removing = oldTotal - newTotal;
-    const ok = confirm(`This will close ${removing} terminal(s) and kill their processes. Continue?`);
+    const ok = await showConfirmDialog(
+      `This will close ${removing} terminal(s) and kill their processes. Continue?`,
+      { confirmText: 'Close', danger: true }
+    );
     if (!ok) return;
 
     // Exit fullscreen if the fullscreened panel will be removed
@@ -425,15 +553,167 @@ function updateGridIndicator() {
 }
 
 function updateStatusBar() {
-  document.getElementById('status-right').textContent =
-    `${panels.length}/${panels.length} active  |  tgrid v0.1.0`;
+  const leftEl = document.getElementById('status-left');
+  const presetId = assignments[String(activeIndex)] || null;
+  const preset = presetId ? presets.find(p => p.id === presetId) : null;
+  if (preset) {
+    leftEl.textContent = `${preset.name} \u00b7 Panel ${activeIndex + 1}`;
+  } else {
+    leftEl.textContent = `Panel ${activeIndex + 1}`;
+  }
+
+  document.getElementById('panel-count').textContent =
+    `${panels.length} panel${panels.length !== 1 ? 's' : ''}`;
+}
+
+function setupHelpButton() {
+  const btn = document.getElementById('help-btn');
+  if (!btn || btn._helpBound) return;
+  btn._helpBound = true;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isMac = navigator.platform.indexOf('Mac') !== -1;
+    const mod = isMac ? '\u2318' : 'Ctrl+';
+    const items = [
+      { label: `${mod}1-9  Focus panel` },
+      { label: `${mod}\u2191\u2193\u2190\u2192  Navigate panels` },
+      { label: `${mod}\u23CE  Toggle fullscreen` },
+      { separator: true },
+      { label: `Shift  New session (on launch)` },
+    ];
+    createDropdown(btn, items);
+  });
+}
+
+// ── Theme management ──
+
+function updateThemeToggleButton(theme) {
+  const toggleBtn = document.getElementById('theme-toggle');
+  if (!toggleBtn) return;
+  const isLight = theme === 'light';
+  toggleBtn.textContent = isLight ? 'Light ▾' : 'Dark ▾';
+  toggleBtn.title = isLight ? 'Switch to dark theme' : 'Switch to light theme';
+  toggleBtn.setAttribute('aria-label', isLight ? 'Current theme: light. Switch to dark theme' : 'Current theme: dark. Switch to light theme');
+}
+
+function applyTheme(theme) {
+  currentTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+
+  const termTheme = theme === 'light' ? LIGHT_TERM_THEME : DARK_TERM_THEME;
+  panels.forEach(p => {
+    p.term.options.theme = { ...termTheme };
+    // Force viewport background update — xterm's ThemeService may not trigger from options setter
+    const viewport = p.panel.querySelector('.xterm-viewport');
+    if (viewport) viewport.style.backgroundColor = termTheme.background;
+    p.term.refresh(0, p.term.rows - 1);
+  });
+
+  updateThemeToggleButton(theme);
+  refreshAllPanelAssignments();
+  ipcRenderer.invoke('set-theme', theme);
+}
+
+function setupThemeToggle() {
+  const btn = document.getElementById('theme-toggle');
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+  });
+}
+
+function initTheme(savedTheme) {
+  let theme;
+  if (savedTheme) {
+    theme = savedTheme;
+  } else {
+    // Detect OS preference on first launch
+    theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  currentTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  TERM_OPTIONS.theme = theme === 'light' ? LIGHT_TERM_THEME : DARK_TERM_THEME;
+  updateThemeToggleButton(theme);
+}
+
+let systemThemeListenerActive = false;
+function setupSystemThemeListener() {
+  if (systemThemeListenerActive) return;
+  systemThemeListenerActive = true;
+  const mq = window.matchMedia('(prefers-color-scheme: light)');
+  mq.addEventListener('change', (e) => {
+    if (!config.theme) {
+      applyTheme(e.matches ? 'light' : 'dark');
+    }
+  });
+}
+
+// ── Focus trap helper ──
+
+function trapFocus(backdrop, modal, onEscape) {
+  backdrop.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { onEscape(); return; }
+    if (e.key === 'Tab') {
+      const focusable = modal.querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])');
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+  });
+}
+
+// ── Confirm dialog (replaces native confirm()) ──
+
+function showConfirmDialog(message, { confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+
+    const msg = document.createElement('p');
+    msg.textContent = message;
+    modal.appendChild(msg);
+
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = cancelText;
+    cancelBtn.addEventListener('click', () => { backdrop.remove(); resolve(false); });
+    actions.appendChild(cancelBtn);
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+    confirmBtn.textContent = confirmText;
+    confirmBtn.addEventListener('click', () => { backdrop.remove(); resolve(true); });
+    actions.appendChild(confirmBtn);
+
+    modal.appendChild(actions);
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) { backdrop.remove(); resolve(false); }
+    });
+
+    trapFocus(backdrop, modal, () => { backdrop.remove(); resolve(false); });
+
+    confirmBtn.focus();
+  });
 }
 
 // ── Modal helpers ──
 
 function showPresetModal(preset, onSave, onDelete) {
   const isNew = !preset;
-  const data = preset ? { ...preset } : { id: null, name: '', image: '', shell: '' };
+  const data = preset ? { ...preset } : { id: null, name: '', image: '', shell: '', color: null };
   let currentImageDataUrl = null;
 
   const backdrop = document.createElement('div');
@@ -499,6 +779,40 @@ function showPresetModal(preset, onSave, onDelete) {
   imgPicker.appendChild(chooseBtn);
   modal.appendChild(imgPicker);
 
+  // Color picker
+  const colorLabel = document.createElement('label');
+  colorLabel.textContent = 'Color';
+  modal.appendChild(colorLabel);
+  const colorPalette = document.createElement('div');
+  colorPalette.className = 'color-palette';
+  colorPalette.setAttribute('role', 'radiogroup');
+  colorPalette.setAttribute('aria-label', 'Preset color');
+  const displayColors = getPresetColors();
+  PRESET_COLORS.forEach((c, idx) => {
+    const displayC = displayColors[idx];
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'color-swatch' + (c.value === null ? ' none-swatch' : '');
+    if (displayC.value) swatch.style.background = displayC.value;
+    const isSelected = data.color === c.value || (data.color == null && c.value === null);
+    if (isSelected) swatch.classList.add('selected');
+    swatch.title = c.label;
+    swatch.setAttribute('aria-label', c.label);
+    swatch.setAttribute('role', 'radio');
+    swatch.setAttribute('aria-checked', String(isSelected));
+    swatch.addEventListener('click', () => {
+      data.color = c.value; // always store the dark palette (canonical) value
+      colorPalette.querySelectorAll('.color-swatch').forEach(s => {
+        s.classList.remove('selected');
+        s.setAttribute('aria-checked', 'false');
+      });
+      swatch.classList.add('selected');
+      swatch.setAttribute('aria-checked', 'true');
+    });
+    colorPalette.appendChild(swatch);
+  });
+  modal.appendChild(colorPalette);
+
   // Shell override
   const shellLabel = document.createElement('label');
   shellLabel.textContent = 'Shell override (optional)';
@@ -517,8 +831,12 @@ function showPresetModal(preset, onSave, onDelete) {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn btn-danger modal-actions-left';
     deleteBtn.textContent = 'Delete';
-    deleteBtn.addEventListener('click', () => {
-      if (confirm(`Delete preset "${data.name}"?`)) {
+    deleteBtn.addEventListener('click', async () => {
+      const ok = await showConfirmDialog(
+        `Delete preset "${data.name}"?`,
+        { confirmText: 'Delete', danger: true }
+      );
+      if (ok) {
         backdrop.remove();
         onDelete(data.id);
       }
@@ -554,6 +872,8 @@ function showPresetModal(preset, onSave, onDelete) {
     if (e.target === backdrop) backdrop.remove();
   });
 
+  trapFocus(backdrop, modal, () => backdrop.remove());
+
   nameInput.focus();
 }
 
@@ -579,8 +899,9 @@ function setupPresetsButton() {
     const items = presets.map(p => ({
       label: p.name,
       imgSrc: presetImageCache[p.image] || null,
+      color: getDisplayColor(p.color) || null,
       onEdit: () => openPresetEditor(p),
-      onClick: () => {}
+      onClick: () => openPresetEditor(p)
     }));
     items.push({ separator: true });
     items.push({ label: '+ New Preset', action: () => openPresetEditor(null) });
@@ -602,6 +923,7 @@ async function openPresetEditor(preset) {
     async (data) => {
       const updatedPresets = await ipcRenderer.invoke('save-preset', data);
       presets = updatedPresets;
+      document.querySelector('.onboarding-hint')?.remove();
       refreshAllPanelAssignments();
     },
     preset ? async (id) => {
@@ -632,6 +954,7 @@ function showPanelPresetMenu(panelIndex, anchorEl) {
       label: p.name,
       imgSrc: presetImageCache[p.image] || null,
       check: currentPresetId === p.id,
+      color: getDisplayColor(p.color) || null,
       onClick: () => assignPresetToPanel(panelIndex, p.id)
     });
   }
@@ -640,8 +963,10 @@ function showPanelPresetMenu(panelIndex, anchorEl) {
 }
 
 async function assignPresetToPanel(panelIndex, presetId) {
+  document.querySelector('.onboarding-hint')?.remove();
   assignments = await ipcRenderer.invoke('set-assignment', { panelIndex, presetId });
   await updatePanelPreset(panelIndex);
+  updateStatusBar();
 }
 
 async function updatePanelPreset(panelIndex) {
@@ -657,6 +982,14 @@ async function updatePanelPreset(panelIndex) {
     nameSpan.textContent = preset ? preset.name : `Terminal ${panelIndex + 1}`;
   }
 
+  // Update panel color (header bar + active glow)
+  const panelColor = (preset && preset.color) ? getDisplayColor(preset.color) : '';
+  const headerEl = panel.panel.querySelector('.panel-header');
+  if (headerEl) {
+    headerEl.style.setProperty('--panel-color', panelColor || 'transparent');
+  }
+  panel.panel.style.setProperty('--panel-color', panelColor || '');
+
   // Update overlay image
   panel.overlay.innerHTML = '';
   if (preset && preset.image) {
@@ -669,9 +1002,14 @@ async function updatePanelPreset(panelIndex) {
     }
   }
 
+  // Update terminal cursor color to match preset color
+  const termTheme = currentTheme === 'light' ? LIGHT_TERM_THEME : DARK_TERM_THEME;
+  const cursorColor = panelColor || termTheme.cursor;
+  panel.term.options.theme = { ...panel.term.options.theme, cursor: cursorColor };
+
   // Update opacity
   const isActive = panelIndex === activeIndex;
-  panel.overlay.style.opacity = isActive ? (config.activeOpacity || 0.18) : (config.defaultOpacity || 0.12);
+  panel.overlay.style.opacity = isActive ? (config.activeOpacity || ACTIVE_OPACITY) : (config.defaultOpacity || DEFAULT_OPACITY);
 }
 
 function refreshAllPanelAssignments() {
@@ -722,23 +1060,59 @@ function setupDragAndDrop(header, panelIndex) {
 }
 
 async function swapPanelAssignments(sourceIndex, targetIndex) {
+  const src = panels[sourceIndex];
+  const tgt = panels[targetIndex];
+  if (!src || !tgt) return;
+
+  // Swap preset assignments
   const sourcePresetId = assignments[String(sourceIndex)] || null;
   const targetPresetId = assignments[String(targetIndex)] || null;
 
-  // Swap in local state
   if (targetPresetId) assignments[String(sourceIndex)] = targetPresetId;
   else delete assignments[String(sourceIndex)];
 
   if (sourcePresetId) assignments[String(targetIndex)] = sourcePresetId;
   else delete assignments[String(targetIndex)];
 
-  // Persist both in a single IPC call to avoid a partial-update window
   await ipcRenderer.invoke('swap-assignments', {
     indexA: sourceIndex, presetIdA: targetPresetId,
     indexB: targetIndex, presetIdB: sourcePresetId
   });
 
-  // Update visuals
+  // Swap terminal DOM: move xterm elements between terminal-wrap containers
+  const srcWrap = src.panel.querySelector('.terminal-wrap');
+  const tgtWrap = tgt.panel.querySelector('.terminal-wrap');
+
+  // Collect xterm DOM nodes (not overlay or onboarding hint)
+  const srcXtermEl = srcWrap.querySelector('.xterm');
+  const tgtXtermEl = tgtWrap.querySelector('.xterm');
+
+  if (srcXtermEl && tgtXtermEl) {
+    // Move xterm elements to the other panel's wrap
+    tgtWrap.appendChild(srcXtermEl);
+    srcWrap.appendChild(tgtXtermEl);
+  }
+
+  // Swap term, fitAddon, ptyId in panel data
+  const tmpTerm = src.term;
+  const tmpFitAddon = src.fitAddon;
+  const tmpPtyId = src.ptyId;
+
+  src.term = tgt.term;
+  src.fitAddon = tgt.fitAddon;
+  src.ptyId = tgt.ptyId;
+
+  tgt.term = tmpTerm;
+  tgt.fitAddon = tmpFitAddon;
+  tgt.ptyId = tmpPtyId;
+
+  // Refit both terminals to their new containers
+  requestAnimationFrame(() => {
+    try { src.fitAddon.fit(); } catch(e) {}
+    try { tgt.fitAddon.fit(); } catch(e) {}
+  });
+
+  // Update preset visuals
   updatePanelPreset(sourceIndex);
   updatePanelPreset(targetIndex);
 }
@@ -749,6 +1123,7 @@ ipcRenderer.on('show-grid-picker', (event, data) => {
   config = data.config;
   presets = config.presets || [];
   assignments = config.assignments || {};
+  initTheme(config.theme);
 
   showGridPicker(data.lastGrid, async (rows, cols) => {
     await ipcRenderer.invoke('grid-selected', { rows, cols });
@@ -760,6 +1135,7 @@ ipcRenderer.on('show-grid-picker', (event, data) => {
 ipcRenderer.on('restore-session', async (event, data) => {
   config = data.config;
   presets = config.presets || [];
+  initTheme(config.theme);
 
   // Give the user a brief window to press Shift
   await new Promise(r => setTimeout(r, 100));
@@ -810,6 +1186,9 @@ ipcRenderer.on('restore-session', async (event, data) => {
   setActivePanel(0);
   setupPresetsButton();
   setupGridIndicator();
+  setupHelpButton();
+  setupThemeToggle();
+  setupSystemThemeListener();
   updateStatusBar();
 
   // Persist updated assignments back to config
@@ -818,17 +1197,7 @@ ipcRenderer.on('restore-session', async (event, data) => {
     grid: { rows: gridRows, cols: gridCols }
   });
 
-  // Handle window resize
-  let resizeTimeout;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      closeAllDropdowns();
-      panels.forEach(p => {
-        try { p.fitAddon.fit(); } catch(e) {}
-      });
-    }, 100);
-  });
+  setupResizeListener();
 });
 
 // ── Init ──
@@ -839,6 +1208,7 @@ ipcRenderer.on('init', async (event, data) => {
   config = data.config;
   presets = config.presets || [];
   assignments = config.assignments || {};
+  initTheme(config.theme);
 
   updateGridIndicator();
 
@@ -862,19 +1232,12 @@ ipcRenderer.on('init', async (event, data) => {
   setActivePanel(0);
   setupPresetsButton();
   setupGridIndicator();
+  setupHelpButton();
+  setupThemeToggle();
+  setupSystemThemeListener();
   updateStatusBar();
 
-  // Handle window resize
-  let resizeTimeout;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      closeAllDropdowns();
-      panels.forEach(p => {
-        try { p.fitAddon.fit(); } catch(e) {}
-      });
-    }, 100);
-  });
+  setupResizeListener();
 });
 
 async function createPanel(index, character, cwd = null) {
@@ -884,6 +1247,8 @@ async function createPanel(index, character, cwd = null) {
   const panel = document.createElement('div');
   panel.className = 'panel';
   panel.dataset.index = index;
+  panel.setAttribute('role', 'region');
+  panel.setAttribute('aria-label', `Terminal ${index + 1}`);
 
   // Header
   const header = document.createElement('div');
@@ -891,8 +1256,16 @@ async function createPanel(index, character, cwd = null) {
   const nameSpan = document.createElement('span');
   nameSpan.className = 'name';
   nameSpan.textContent = character ? character.name : `Terminal ${index + 1}`;
+
+  // Apply preset color to header and panel
+  const presetColor = (character && character.color) ? getDisplayColor(character.color) : '';
+  if (presetColor) {
+    header.style.setProperty('--panel-color', presetColor);
+    panel.style.setProperty('--panel-color', presetColor);
+  }
+
   const rightGroup = document.createElement('span');
-  rightGroup.style.cssText = 'display:flex;align-items:center;gap:2px;';
+  rightGroup.className = 'panel-header-right';
   const indexSpan = document.createElement('span');
   indexSpan.className = 'index';
   indexSpan.textContent = index < 9 ? `\u2318${index + 1}` : '';
@@ -901,6 +1274,8 @@ async function createPanel(index, character, cwd = null) {
   const menuBtn = document.createElement('button');
   menuBtn.className = 'panel-menu-btn';
   menuBtn.textContent = '···';
+  menuBtn.setAttribute('aria-label', 'Panel options');
+  menuBtn.setAttribute('aria-haspopup', 'menu');
   menuBtn.setAttribute('draggable', 'false');
   menuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -923,7 +1298,7 @@ async function createPanel(index, character, cwd = null) {
   // Character overlay
   const overlay = document.createElement('div');
   overlay.className = 'character-overlay';
-  overlay.style.opacity = config.defaultOpacity || 0.12;
+  overlay.style.opacity = config.defaultOpacity || DEFAULT_OPACITY;
 
   if (character && character.image) {
     const dataUrl = presetImageCache[character.image] || await ipcRenderer.invoke('load-image', character.image);
@@ -937,6 +1312,15 @@ async function createPanel(index, character, cwd = null) {
   }
 
   termWrap.appendChild(overlay);
+
+  // Show onboarding hint on first panel when no presets exist
+  if (index === 0 && presets.length === 0) {
+    const hint = document.createElement('div');
+    hint.className = 'onboarding-hint';
+    hint.innerHTML = '<p>Click <span class="key">···</span> to assign a character preset</p>';
+    termWrap.appendChild(hint);
+  }
+
   panel.appendChild(termWrap);
   grid.appendChild(panel);
 
@@ -945,11 +1329,18 @@ async function createPanel(index, character, cwd = null) {
     setActivePanel(index);
   });
 
-  // Create xterm
-  const term = new Terminal(TERM_OPTIONS);
+  // Create xterm with current theme + preset cursor color
+  const termThemeNow = currentTheme === 'light' ? LIGHT_TERM_THEME : DARK_TERM_THEME;
+  const presetCursorColor = (character && character.color) ? getDisplayColor(character.color) : null;
+  const termThemeInit = presetCursorColor ? { ...termThemeNow, cursor: presetCursorColor } : { ...termThemeNow };
+  const term = new Terminal({ ...TERM_OPTIONS, theme: termThemeInit });
   const fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
   term.open(termWrap);
+
+  // Force viewport background to match theme
+  const viewport = termWrap.querySelector('.xterm-viewport');
+  if (viewport) viewport.style.backgroundColor = termThemeNow.background;
 
   const ptyId = `pty-${index}`;
 
@@ -998,7 +1389,7 @@ function setActivePanel(index) {
   if (oldActive) {
     oldActive.panel.classList.remove('active');
     if (oldActive.overlay) {
-      oldActive.overlay.style.opacity = config.defaultOpacity || 0.12;
+      oldActive.overlay.style.opacity = config.defaultOpacity || DEFAULT_OPACITY;
     }
   }
 
@@ -1006,9 +1397,10 @@ function setActivePanel(index) {
   const newActive = panels[activeIndex];
   newActive.panel.classList.add('active');
   if (newActive.overlay) {
-    newActive.overlay.style.opacity = config.activeOpacity || 0.18;
+    newActive.overlay.style.opacity = config.activeOpacity || ACTIVE_OPACITY;
   }
   newActive.term.focus();
+  updateStatusBar();
 }
 
 // PTY data -> Terminal

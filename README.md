@@ -1,17 +1,18 @@
 # tgrid
 
-AI Agent Terminal Grid Manager with character image overlays.
+Terminal grid manager for AI agents. Run multiple terminals in a grid layout with semi-transparent character image overlays on each panel.
 
-Run multiple Claude Code sessions in a grid layout, each with a semi-transparent character profile image. Turn your terminal sessions into a team of AI agents with visual identities.
+![Electron](https://img.shields.io/badge/Electron-41-47848F?logo=electron)
+![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Features
 
-- **NxM Grid Layout** — `tgrid 2 3` opens a 2x3 grid of terminals
-- **Character Overlays** — Semi-transparent profile images on each terminal panel
-- **Keyboard Navigation** — `Cmd+1-9` to focus panels, `Cmd+Arrow` to navigate
-- **Fullscreen Toggle** — `Cmd+Enter` to maximize a single panel
-- **Per-panel Shell Config** — Different shell/command per terminal (e.g., `claude` for Claude Code)
-- **Active Panel Glow** — Cyan glow border on the focused panel
+- **Grid Layout** — Up to 4x4 (16) terminals arranged simultaneously
+- **Character Presets** — Assign name, image, and shell per panel via presets
+- **Image Overlay** — Semi-transparent character images rendered over terminals
+- **Session Restore** — Saves grid config, preset assignments, and working directories on exit; restores on relaunch
+- **Drag & Drop** — Drag panel headers to swap preset assignments between panels
+- **Runtime Resize** — Change grid dimensions while running
 
 ## Quick Start
 
@@ -19,54 +20,101 @@ Run multiple Claude Code sessions in a grid layout, each with a semi-transparent
 # Install dependencies
 npm install
 
-# Run with a 2x2 grid
-npm start -- 2 2
+# Launch (shows grid picker UI)
+npm start
 
-# Or a 2x3 grid
-npx electron . 2 3
+# Launch with specific grid size
+npx electron . 2 3   # 2 rows, 3 columns
 ```
 
-## Character Configuration
+## Keyboard Shortcuts
 
-Edit `~/.tgrid/config.json`:
+| Shortcut | Action |
+|---|---|
+| `Cmd/Ctrl + 1-9` | Focus panel by number |
+| `Cmd/Ctrl + ←↑↓→` | Navigate between panels |
+| `Cmd/Ctrl + Enter` | Toggle fullscreen for active panel |
+| `Shift` (on launch) | Skip session restore, start fresh |
+
+## Configuration
+
+Config is stored at `~/.tgrid/config.json`.
 
 ```json
 {
   "defaultShell": "/bin/zsh",
   "defaultOpacity": 0.12,
   "activeOpacity": 0.18,
-  "characters": [
+  "presets": [
     {
-      "name": "Rei",
-      "image": "~/.tgrid/characters/rei.png",
-      "shell": "claude"
-    },
-    {
-      "name": "Asuka",
-      "image": "~/.tgrid/characters/asuka.png"
+      "id": "claude",
+      "name": "Claude",
+      "image": "~/.tgrid/characters/claude.png",
+      "shell": "/bin/zsh"
     }
-  ]
+  ],
+  "assignments": {
+    "0": "claude"
+  }
 }
 ```
 
-- Place character images (PNG/WebP/JPEG) in `~/.tgrid/characters/`
-- Transparent background PNGs work best
-- Characters are assigned to panels in array order
-- `shell` field is optional — defaults to `defaultShell`
+| Field | Description |
+|---|---|
+| `defaultShell` | Default shell path |
+| `defaultOpacity` | Character image opacity for inactive panels |
+| `activeOpacity` | Character image opacity for the active panel |
+| `presets` | List of character presets (name, image, shell) |
+| `assignments` | Panel index → preset ID mapping |
 
-## Keyboard Shortcuts
+## Building
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+1`~`Cmd+9` | Focus panel by number |
-| `Cmd+Arrow` | Navigate between panels (wraps) |
-| `Cmd+Enter` | Toggle fullscreen for active panel |
+Generate release builds for distribution.
+
+```bash
+# Build for current platform
+npm run dist
+
+# Platform-specific builds
+npm run dist:mac     # macOS (dmg + zip, x64/arm64)
+npm run dist:win     # Windows (nsis + zip, x64)
+npm run dist:linux   # Linux (AppImage + deb + tar.gz, x64)
+
+# Build for all platforms
+npm run dist:all
+
+# Or use the build script
+./scripts/build.sh mac|win|linux|all|current
+```
+
+Build output goes to the `release/` directory.
+
+### App Icon
+
+Place a 512x512+ PNG at `build/icon.png` to use as the app icon. A placeholder icon is included by default.
+
+## Project Structure
+
+```
+tgrid/
+├── src/
+│   ├── main.js          # Electron main process (PTY, IPC, session management)
+│   ├── renderer.js      # Renderer (UI, terminals, grid management)
+│   ├── preload.js       # Preload script (minimal)
+│   └── index.html       # UI layout and styles
+├── scripts/
+│   └── build.sh         # Release build script
+├── build/
+│   └── icon.png         # App icon
+└── package.json
+```
 
 ## Tech Stack
 
-- **Electron** — Desktop app shell
-- **xterm.js** — Terminal emulation
-- **node-pty** — PTY process management
+- **Electron 41** — Desktop application framework
+- **node-pty** — Native PTY (pseudo-terminal) bindings
+- **xterm.js 6** — Terminal emulator (xterm-256color)
+- **electron-builder** — Cross-platform build and packaging
 
 ## License
 

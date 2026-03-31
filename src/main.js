@@ -49,8 +49,8 @@ function loadConfig() {
   if (!fs.existsSync(CONFIG_FILE)) {
     const defaultConfig = {
       defaultShell: process.env.SHELL || '/bin/zsh',
-      defaultOpacity: 0.12,
-      activeOpacity: 0.18,
+      defaultOpacity: 0.3,
+      activeOpacity: 0.5,
       presets: [],
       assignments: {}
     };
@@ -161,7 +161,7 @@ function createWindow() {
     height: 900,
     minWidth: 600,
     minHeight: 400,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: (config.theme === 'light') ? '#ebebeb' : '#0e0e0e',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
@@ -203,24 +203,26 @@ function createWindow() {
     }
   });
 
-  // Register Cmd+number shortcuts for panel focus
-  for (let i = 1; i <= 9; i++) {
-    globalShortcut.register(`CommandOrControl+${i}`, () => {
-      mainWindow.webContents.send('focus-panel', i - 1);
+  // Register shortcuts only when window is focused (globalShortcut is OS-level)
+  function registerShortcuts() {
+    for (let i = 1; i <= 9; i++) {
+      globalShortcut.register(`CommandOrControl+${i}`, () => {
+        mainWindow.webContents.send('focus-panel', i - 1);
+      });
+    }
+    ['Up', 'Down', 'Left', 'Right'].forEach(dir => {
+      globalShortcut.register(`CommandOrControl+${dir}`, () => {
+        mainWindow.webContents.send('focus-direction', dir.toLowerCase());
+      });
+    });
+    globalShortcut.register('CommandOrControl+Return', () => {
+      mainWindow.webContents.send('toggle-fullscreen');
     });
   }
 
-  // Cmd+Arrow for directional focus
-  ['Up', 'Down', 'Left', 'Right'].forEach(dir => {
-    globalShortcut.register(`CommandOrControl+${dir}`, () => {
-      mainWindow.webContents.send('focus-direction', dir.toLowerCase());
-    });
-  });
-
-  // Cmd+Enter for fullscreen toggle
-  globalShortcut.register('CommandOrControl+Return', () => {
-    mainWindow.webContents.send('toggle-fullscreen');
-  });
+  registerShortcuts();
+  mainWindow.on('focus', registerShortcuts);
+  mainWindow.on('blur', () => globalShortcut.unregisterAll());
 
   mainWindow.on('close', () => {
     // Save session before window closes (PTYs still alive here)
@@ -366,6 +368,7 @@ ipcMain.handle('get-presets', () => {
 ipcMain.handle('save-preset', (event, preset) => {
   const config = loadConfig();
   const existingIndex = config.presets.findIndex(p => p.id === preset.id);
+  if (preset.color === undefined) preset.color = null;
   if (existingIndex >= 0) {
     config.presets[existingIndex] = { ...config.presets[existingIndex], ...preset };
   } else {
@@ -437,6 +440,17 @@ ipcMain.handle('set-assignment', (event, { panelIndex, presetId }) => {
   }
   saveConfig(config);
   return config.assignments;
+});
+
+// IPC: Set theme preference
+ipcMain.handle('set-theme', (event, theme) => {
+  const config = loadConfig();
+  config.theme = theme;
+  saveConfig(config);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setBackgroundColor(theme === 'light' ? '#ebebeb' : '#0e0e0e');
+  }
+  return theme;
 });
 
 app.whenReady().then(createWindow);
