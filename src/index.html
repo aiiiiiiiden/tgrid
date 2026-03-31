@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<title>tgrid</title>
+<link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    color: #c8c8d0;
+    font-family: -apple-system, 'SF Mono', 'Menlo', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-app-region: no-drag;
+  }
+
+  /* Title bar */
+  .titlebar {
+    background: #12121a;
+    border-bottom: 1px solid #2a2a3a;
+    padding: 8px 16px 8px 80px; /* space for traffic lights */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    -webkit-app-region: drag;
+    flex-shrink: 0;
+    height: 38px;
+  }
+  .titlebar h1 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e0e0e8;
+    letter-spacing: 1px;
+    -webkit-app-region: drag;
+  }
+  .titlebar h1 .accent { color: #00d4ff; }
+  .grid-indicator {
+    background: #1a1a2e;
+    border: 1px solid #2a2a3a;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: #666;
+    -webkit-app-region: no-drag;
+  }
+
+  /* Grid container */
+  .grid {
+    flex: 1;
+    display: grid;
+    gap: 2px;
+    padding: 2px;
+    background: #0a0a0f;
+    overflow: hidden;
+  }
+
+  /* Terminal panel */
+  .panel {
+    background: #0d0d14;
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    min-width: 0;
+    min-height: 0;
+  }
+  .panel.active {
+    border-color: #00d4ff;
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+  }
+  .panel.fullscreen {
+    position: fixed;
+    top: 38px;
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    z-index: 100;
+    border-radius: 0;
+  }
+
+  /* Panel header */
+  .panel-header {
+    background: #12121a;
+    padding: 3px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #1a1a2a;
+    font-size: 11px;
+    flex-shrink: 0;
+    height: 24px;
+  }
+  .panel-header .name {
+    color: #e0e0e8;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .panel-header .index {
+    color: #333;
+    font-size: 10px;
+    margin-left: 4px;
+  }
+
+  /* Terminal content area */
+  .terminal-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  .terminal-wrap .xterm {
+    height: 100%;
+  }
+
+  /* Character overlay — THE CORE FEATURE */
+  .character-overlay {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 35%;
+    height: 70%;
+    pointer-events: none;
+    z-index: 50;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+  }
+  .character-overlay img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  /* Ensure xterm doesn't clip the overlay */
+  .terminal-wrap .xterm,
+  .terminal-wrap .xterm-viewport,
+  .terminal-wrap .xterm-screen {
+    z-index: 1;
+  }
+
+  /* Status bar */
+  .statusbar {
+    background: #12121a;
+    border-top: 1px solid #2a2a3a;
+    padding: 3px 16px;
+    font-size: 11px;
+    color: #444;
+    display: flex;
+    justify-content: space-between;
+    flex-shrink: 0;
+    height: 24px;
+  }
+  .statusbar .key { color: #00d4ff; }
+
+  /* Panel menu button (... ) */
+  .panel-menu-btn {
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+    line-height: 24px;
+    letter-spacing: 1px;
+    -webkit-app-region: no-drag;
+    transition: color 0.15s;
+  }
+  .panel-menu-btn:hover { color: #00d4ff; }
+
+  /* Titlebar presets button */
+  .presets-btn {
+    background: #1a1a2e;
+    border: 1px solid #2a2a3a;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: #c8c8d0;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .presets-btn:hover {
+    border-color: #00d4ff;
+    color: #00d4ff;
+  }
+
+  /* Shared dropdown */
+  .dropdown {
+    position: absolute;
+    background: #1a1a2e;
+    border: 1px solid #2a2a3a;
+    border-radius: 6px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 200;
+    min-width: 160px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #c8c8d0;
+    transition: background 0.1s;
+    white-space: nowrap;
+  }
+  .dropdown-item:hover { background: rgba(0, 212, 255, 0.1); }
+  .dropdown-item.active { color: #00d4ff; }
+  .dropdown-item img {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .dropdown-item .check {
+    width: 16px;
+    text-align: center;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+  .dropdown-item .edit-icon {
+    margin-left: auto;
+    color: #555;
+    font-size: 11px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: color 0.1s, background 0.1s;
+  }
+  .dropdown-item .edit-icon:hover {
+    color: #00d4ff;
+    background: rgba(0, 212, 255, 0.1);
+  }
+  .dropdown-separator {
+    height: 1px;
+    background: #2a2a3a;
+    margin: 4px 0;
+  }
+  .dropdown-action {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #00d4ff;
+    transition: background 0.1s;
+  }
+  .dropdown-action:hover { background: rgba(0, 212, 255, 0.1); }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 250;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal {
+    background: #12121a;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    padding: 24px;
+    width: 360px;
+    z-index: 300;
+  }
+  .modal h3 {
+    color: #e0e0e8;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  .modal label {
+    display: block;
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 4px;
+  }
+  .modal input[type="text"] {
+    width: 100%;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 4px;
+    padding: 8px 10px;
+    color: #c8c8d0;
+    font-size: 13px;
+    font-family: inherit;
+    margin-bottom: 12px;
+  }
+  .modal input[type="text"]:focus {
+    border-color: #00d4ff;
+    outline: none;
+  }
+  .modal-image-picker {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .modal-image-picker img {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+  }
+  .modal-image-picker .placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    background: #0d0d14;
+    border: 1px dashed #2a2a3a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    font-size: 18px;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .modal-actions-left {
+    margin-right: auto;
+  }
+  .btn {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid #2a2a3a;
+    font-family: inherit;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary {
+    background: #00d4ff;
+    color: #0a0a0f;
+    border-color: #00d4ff;
+    font-weight: 600;
+  }
+  .btn-secondary {
+    background: #1a1a2e;
+    color: #c8c8d0;
+  }
+  .btn-danger {
+    background: transparent;
+    color: #ff5555;
+    border-color: #ff5555;
+  }
+
+  /* Grid picker overlay */
+  .grid-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: #0a0a0f;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .grid-picker {
+    text-align: center;
+  }
+  .grid-picker h2 {
+    color: #e0e0e8;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 24px;
+  }
+  .grid-picker-cells {
+    display: inline-grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .grid-cell {
+    width: 40px;
+    height: 32px;
+    background: #1a1a2e;
+    border: 1px solid #2a2a3a;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .grid-cell.highlighted {
+    background: rgba(0, 212, 255, 0.2);
+    border-color: #00d4ff;
+  }
+  .grid-cell.selected {
+    background: rgba(0, 212, 255, 0.35);
+    border-color: #00d4ff;
+  }
+  .grid-picker-info {
+    color: #888;
+    font-size: 14px;
+    margin-bottom: 16px;
+    height: 24px;
+  }
+  .grid-picker-info .size {
+    color: #00d4ff;
+    font-weight: 600;
+  }
+  .grid-picker .btn-start {
+    padding: 8px 32px;
+    font-size: 14px;
+  }
+  .grid-picker .btn-start:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* Grid indicator as button */
+  .grid-indicator {
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .grid-indicator:hover {
+    border-color: #00d4ff;
+    color: #00d4ff;
+  }
+
+  /* Grid resize dropdown */
+  .grid-resize-dropdown {
+    padding: 12px;
+  }
+  .grid-resize-cells {
+    display: inline-grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+  .grid-resize-cell {
+    width: 28px;
+    height: 22px;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .grid-resize-cell.highlighted {
+    background: rgba(0, 212, 255, 0.2);
+    border-color: #00d4ff;
+  }
+  .grid-resize-cell.current {
+    background: rgba(0, 212, 255, 0.35);
+    border-color: #00d4ff;
+  }
+  .grid-resize-info {
+    color: #888;
+    font-size: 11px;
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  /* Drag and drop states */
+  .panel-header[draggable="true"] {
+    cursor: grab;
+  }
+  .panel-header.dragging {
+    opacity: 0.5;
+  }
+  .panel-header.drag-over {
+    border-top: 2px solid #00d4ff;
+    padding-top: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <h1>t<span class="accent">grid</span></h1>
+  <div style="display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag;">
+    <button class="presets-btn" id="presets-btn">Presets ▾</button>
+    <button class="grid-indicator" id="grid-indicator"></button>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="statusbar">
+  <span>
+    <span class="key">&#8984;1-9</span> Focus
+    &nbsp;|&nbsp;
+    <span class="key">&#8984;&#8593;&#8595;&#8592;&#8594;</span> Navigate
+    &nbsp;|&nbsp;
+    <span class="key">&#8984;&#9166;</span> Fullscreen
+    &nbsp;|&nbsp;
+    <span class="key">Shift</span> New session
+  </span>
+  <span id="status-right">tgrid v0.1.0</span>
+</div>
+
+<script src="./renderer.js"></script>
+</body>
+</html>
