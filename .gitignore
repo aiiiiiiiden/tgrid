@@ -7,3 +7,4 @@ out/
 release/
 *.tsbuildinfo
 .gstack/
+settings.local.json
