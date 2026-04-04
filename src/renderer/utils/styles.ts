@@ -1,0 +1,1 @@
+export const TOOLBAR_BTN = 'text-[11px] px-2.5 border border-input bg-secondary text-secondary-foreground shadow-none hover:bg-secondary hover:border-primary hover:text-primary active:translate-y-px [-webkit-app-region:no-drag]';

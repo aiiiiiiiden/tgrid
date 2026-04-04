@@ -11,19 +11,23 @@ export function expandTilde(p: string): string {
   return p;
 }
 
-export function loadImage(imagePath: string): string | null {
+const MIME_MAP: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+};
+
+export async function loadImage(imagePath: string): Promise<string | null> {
   const resolved = expandTilde(imagePath);
-  if (!fs.existsSync(resolved)) return null;
-  const ext = path.extname(resolved).toLowerCase();
-  const mimeMap: Record<string, string> = {
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.webp': 'image/webp',
-  };
-  const mime = mimeMap[ext] || 'image/png';
-  const data = fs.readFileSync(resolved);
-  return `data:${mime};base64,${data.toString('base64')}`;
+  try {
+    const data = await fs.promises.readFile(resolved);
+    const ext = path.extname(resolved).toLowerCase();
+    const mime = MIME_MAP[ext] || 'image/png';
+    return `data:${mime};base64,${data.toString('base64')}`;
+  } catch {
+    return null;
+  }
 }
 
 export async function pickImage(mainWindow: BrowserWindow): Promise<string | null> {
@@ -40,8 +44,8 @@ export async function pickImage(mainWindow: BrowserWindow): Promise<string | nul
   const charDir = path.join(CONFIG_DIR, 'characters');
   const dest = path.join(charDir, destName);
 
-  fs.mkdirSync(charDir, { recursive: true });
-  fs.copyFileSync(src, dest);
+  await fs.promises.mkdir(charDir, { recursive: true });
+  await fs.promises.copyFile(src, dest);
 
   return `~/.tgrid/characters/${destName}`;
 }

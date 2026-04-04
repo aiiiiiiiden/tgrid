@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 interface GridLayoutState {
   rows: number;
@@ -22,8 +22,10 @@ export function GridLayoutProvider({ children }: { children: React.ReactNode }) 
     setState({ rows, cols });
   }, []);
 
+  const value = useMemo(() => ({ ...state, setGrid }), [state, setGrid]);
+
   return (
-    <GridLayoutContext.Provider value={{ ...state, setGrid }}>
+    <GridLayoutContext.Provider value={value}>
       {children}
     </GridLayoutContext.Provider>
   );

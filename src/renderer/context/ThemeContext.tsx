@@ -34,6 +34,11 @@ export function ThemeProvider({
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Sync when config arrives after mount (e.g., session restore)
+  useEffect(() => {
+    if (initialTheme) setThemeState(initialTheme);
+  }, [initialTheme]);
+
   // Listen to OS theme changes when no explicit theme is saved
   useEffect(() => {
     if (initialTheme) return;
@@ -51,8 +56,12 @@ export function ThemeProvider({
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
-  }, [theme, setTheme]);
+    setThemeState((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      window.tgrid.invoke('set-theme', next);
+      return next;
+    });
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>

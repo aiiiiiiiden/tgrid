@@ -1,88 +1,80 @@
-import React, { useState, useCallback } from 'react';
-import type { Preset } from '../../shared/types';
+import React, { useCallback } from 'react';
 import { usePresets } from '../context/GridContext';
 import { useTheme } from '../context/ThemeContext';
 import { getDisplayColor } from '../utils/colors';
-import { useDropdownPosition } from '../hooks/useDropdownPosition';
+import PresetAvatar from './PresetAvatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface PresetDropdownProps {
   panelIndex: number;
-  anchorEl: HTMLElement;
-  onClose: () => void;
+  children: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEditPreset?: (preset: import('../../shared/types').Preset | null) => void;
 }
 
-export default function PresetDropdown({ panelIndex, anchorEl, onClose }: PresetDropdownProps) {
+export default function PresetDropdown({ panelIndex, children, open, onOpenChange, onEditPreset }: PresetDropdownProps) {
   const { presets, assignments, setAssignments, imageCache } = usePresets();
   const { theme } = useTheme();
-  const dropdownRef = useDropdownPosition<HTMLDivElement>({ anchorEl, onClose });
-  const [focusedIdx, setFocusedIdx] = useState(0);
-  const currentPresetId = assignments[String(panelIndex)] || null;
-
-  const items: Array<{ id: string | null; label: string; isCheck: boolean; color?: string; imgSrc?: string }> = [
-    { id: null, label: 'None', isCheck: currentPresetId === null },
-  ];
-  for (const p of presets) {
-    items.push({
-      id: p.id,
-      label: p.name,
-      isCheck: currentPresetId === p.id,
-      color: getDisplayColor(p.color, theme) || undefined,
-      imgSrc: imageCache[p.image || ''] || undefined,
-    });
-  }
+  const currentPresetId = assignments[String(panelIndex)] || '';
 
   const assign = useCallback(
-    async (presetId: string | null) => {
-      const newAssignments = await window.tgrid.invoke('set-assignment', { panelIndex, presetId });
+    async (presetId: string) => {
+      const newAssignments = await window.tgrid.invoke('set-assignment', {
+        panelIndex,
+        presetId: presetId || null,
+      });
       setAssignments(newAssignments);
-      onClose();
+      onOpenChange(false);
     },
-    [panelIndex, setAssignments, onClose],
-  );
-
-  // Keyboard nav
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setFocusedIdx((i) => (i < items.length - 1 ? i + 1 : 0));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setFocusedIdx((i) => (i > 0 ? i - 1 : items.length - 1));
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        assign(items[focusedIdx].id);
-      }
-    },
-    [items, focusedIdx, assign],
+    [panelIndex, setAssignments, onOpenChange],
   );
 
   return (
-    <div
-      ref={dropdownRef}
-      className="dropdown"
-      role="menu"
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-    >
-      {items.map((item, i) => (
-        <React.Fragment key={item.id ?? 'none'}>
-          {i === 1 && <div className="dropdown-separator" />}
-          <div
-            className={`dropdown-item${item.isCheck ? ' active' : ''}${focusedIdx === i ? ' focused' : ''}`}
-            role="menuitem"
-            onClick={() => assign(item.id)}
-            onMouseEnter={() => setFocusedIdx(i)}
-          >
-            <span className="check">{item.isCheck ? '\u2713' : ''}</span>
-            {item.color && (
-              <span className="preset-color-dot" style={{ background: item.color }} />
-            )}
-            {item.imgSrc && <img src={item.imgSrc} alt="" />}
-            <span>{item.label}</span>
-          </div>
-        </React.Fragment>
-      ))}
-    </div>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        {children}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[160px]">
+        <DropdownMenuItem className="gap-2" onClick={() => assign('')}>
+          <span className="size-5 rounded-full shrink-0 border border-dashed border-muted-foreground/60" />
+          <span className="text-muted-foreground">None</span>
+          {currentPresetId === '' && <span className="ml-auto text-primary text-xs">&#10003;</span>}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+
+        {presets.map((p) => {
+          const color = getDisplayColor(p.color, theme) || undefined;
+          const imgSrc = imageCache[p.image || ''] || undefined;
+          const isSelected = currentPresetId === p.id;
+
+          return (
+            <DropdownMenuItem key={p.id} className="gap-2" onClick={() => assign(p.id)}>
+              <PresetAvatar imgSrc={imgSrc} color={color} />
+              <span>{p.name}</span>
+              {isSelected && <span className="ml-auto text-primary text-xs">&#10003;</span>}
+            </DropdownMenuItem>
+          );
+        })}
+
+        {onEditPreset && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-muted-foreground"
+              onClick={() => { onOpenChange(false); onEditPreset(null); }}
+            >
+              Manage Presets&#8230;
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

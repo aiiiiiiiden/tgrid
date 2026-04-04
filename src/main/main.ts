@@ -17,6 +17,7 @@ import {
   resizePty,
   killPty,
   killAllPtys,
+  setTheme as setPtyTheme,
 } from './pty-manager';
 import fs from 'node:fs';
 import { loadImage, pickImage } from './image-loader';
@@ -74,6 +75,7 @@ function sendToRenderer(channel: string, data?: unknown) {
 
 function createWindow(): void {
   const config = loadConfig();
+  setPtyTheme(config.theme || 'dark');
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -291,6 +293,7 @@ ipcMain.handle('set-theme', (_event, theme: 'dark' | 'light') => {
   const config = loadConfig();
   config.theme = theme;
   saveConfig(config);
+  setPtyTheme(theme);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setBackgroundColor(theme === 'light' ? '#ebebeb' : '#0e0e0e');
   }

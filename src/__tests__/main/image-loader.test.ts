@@ -37,43 +37,38 @@ describe('loadImage', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns null for non-existent file', () => {
-    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
-    expect(loadImage('/no/such/file.png')).toBeNull();
+  it('returns null for non-existent file', async () => {
+    vi.spyOn(fs.promises, 'readFile').mockRejectedValue(new Error('ENOENT'));
+    expect(await loadImage('/no/such/file.png')).toBeNull();
   });
 
-  it('returns data URL for PNG', () => {
-    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
-    vi.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('fakepng'));
-    const result = loadImage('/test/image.png');
+  it('returns data URL for PNG', async () => {
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('fakepng'));
+    const result = await loadImage('/test/image.png');
     expect(result).toBe(`data:image/png;base64,${Buffer.from('fakepng').toString('base64')}`);
   });
 
-  it('returns correct MIME for jpg', () => {
-    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
-    vi.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('fakejpg'));
-    const result = loadImage('/test/image.jpg');
+  it('returns correct MIME for jpg', async () => {
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('fakejpg'));
+    const result = await loadImage('/test/image.jpg');
     expect(result).toMatch(/^data:image\/jpeg;base64,/);
   });
 
-  it('returns correct MIME for webp', () => {
-    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
-    vi.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('fakewebp'));
-    const result = loadImage('/test/image.webp');
+  it('returns correct MIME for webp', async () => {
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('fakewebp'));
+    const result = await loadImage('/test/image.webp');
     expect(result).toMatch(/^data:image\/webp;base64,/);
   });
 
-  it('defaults to image/png for unknown extension', () => {
-    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
-    vi.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('data'));
-    const result = loadImage('/test/image.bmp');
+  it('defaults to image/png for unknown extension', async () => {
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('data'));
+    const result = await loadImage('/test/image.bmp');
     expect(result).toMatch(/^data:image\/png;base64,/);
   });
 
-  it('expands tilde paths', () => {
-    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
-    vi.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('data'));
-    loadImage('~/.tgrid/characters/test.png');
-    expect(existsSpy).toHaveBeenCalledWith(path.join(os.homedir(), '.tgrid/characters/test.png'));
+  it('expands tilde paths', async () => {
+    const readSpy = vi.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('data'));
+    await loadImage('~/.tgrid/characters/test.png');
+    expect(readSpy).toHaveBeenCalledWith(path.join(os.homedir(), '.tgrid/characters/test.png'));
   });
 });
