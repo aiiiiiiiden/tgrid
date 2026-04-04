@@ -31,16 +31,16 @@ describe('useDragSwap', () => {
     document.querySelectorAll = vi.fn().mockReturnValue([]);
   });
 
-  it('returns draggable handlers', () => {
+  it('returns drag and drop handler groups', () => {
     const { result } = renderHook(() =>
       useDragSwap({ panelIndex: 0, fullscreenIndex: -1, onSwap }),
     );
-    expect(result.current.draggable).toBe(true);
-    expect(result.current.onDragStart).toBeDefined();
-    expect(result.current.onDragEnd).toBeDefined();
-    expect(result.current.onDragOver).toBeDefined();
-    expect(result.current.onDragLeave).toBeDefined();
-    expect(result.current.onDrop).toBeDefined();
+    expect(result.current.dragHandlers.draggable).toBe(true);
+    expect(result.current.dragHandlers.onDragStart).toBeDefined();
+    expect(result.current.dragHandlers.onDragEnd).toBeDefined();
+    expect(result.current.dropHandlers.onDragOver).toBeDefined();
+    expect(result.current.dropHandlers.onDragLeave).toBeDefined();
+    expect(result.current.dropHandlers.onDrop).toBeDefined();
   });
 
   it('prevents drag in fullscreen mode', () => {
@@ -49,7 +49,7 @@ describe('useDragSwap', () => {
     );
     const e = createDragEvent();
     act(() => {
-      result.current.onDragStart(e as unknown as React.DragEvent);
+      result.current.dragHandlers.onDragStart(e as unknown as React.DragEvent);
     });
     expect(e.preventDefault).toHaveBeenCalled();
   });
@@ -60,7 +60,7 @@ describe('useDragSwap', () => {
     );
     const e = createDragEvent();
     act(() => {
-      result.current.onDragStart(e as unknown as React.DragEvent);
+      result.current.dragHandlers.onDragStart(e as unknown as React.DragEvent);
     });
     expect(e.dataTransfer!.effectAllowed).toBe('move');
   });
@@ -72,7 +72,7 @@ describe('useDragSwap', () => {
     );
     const startEvent = createDragEvent();
     act(() => {
-      sourceResult.current.onDragStart(startEvent as unknown as React.DragEvent);
+      sourceResult.current.dragHandlers.onDragStart(startEvent as unknown as React.DragEvent);
     });
 
     // Then drop on panel 1
@@ -83,7 +83,7 @@ describe('useDragSwap', () => {
     // Manually set data to simulate what browser does on drop
     dropEvent.dataTransfer!.setData!('text/plain', '0');
     act(() => {
-      targetResult.current.onDrop(dropEvent as unknown as React.DragEvent);
+      targetResult.current.dropHandlers.onDrop(dropEvent as unknown as React.DragEvent);
     });
     expect(onSwap).toHaveBeenCalledWith(0, 1);
   });
@@ -94,13 +94,13 @@ describe('useDragSwap', () => {
     );
     const startEvent = createDragEvent();
     act(() => {
-      result.current.onDragStart(startEvent as unknown as React.DragEvent);
+      result.current.dragHandlers.onDragStart(startEvent as unknown as React.DragEvent);
     });
 
     const dropEvent = createDragEvent();
     dropEvent.dataTransfer!.setData!('text/plain', '0');
     act(() => {
-      result.current.onDrop(dropEvent as unknown as React.DragEvent);
+      result.current.dropHandlers.onDrop(dropEvent as unknown as React.DragEvent);
     });
     expect(onSwap).not.toHaveBeenCalled();
   });
@@ -111,7 +111,7 @@ describe('useDragSwap', () => {
       useDragSwap({ panelIndex: 0, fullscreenIndex: -1, onSwap }),
     );
     act(() => {
-      source.current.onDragStart(createDragEvent() as unknown as React.DragEvent);
+      source.current.dragHandlers.onDragStart(createDragEvent() as unknown as React.DragEvent);
     });
 
     // DragOver on panel 1
@@ -120,7 +120,7 @@ describe('useDragSwap', () => {
     );
     const overEvent = createDragEvent();
     act(() => {
-      target.current.onDragOver(overEvent as unknown as React.DragEvent);
+      target.current.dropHandlers.onDragOver(overEvent as unknown as React.DragEvent);
     });
     expect(overEvent.preventDefault).toHaveBeenCalled();
   });
@@ -130,12 +130,12 @@ describe('useDragSwap', () => {
       useDragSwap({ panelIndex: 0, fullscreenIndex: -1, onSwap }),
     );
     act(() => {
-      result.current.onDragStart(createDragEvent() as unknown as React.DragEvent);
+      result.current.dragHandlers.onDragStart(createDragEvent() as unknown as React.DragEvent);
     });
 
     const overEvent = createDragEvent();
     act(() => {
-      result.current.onDragOver(overEvent as unknown as React.DragEvent);
+      result.current.dropHandlers.onDragOver(overEvent as unknown as React.DragEvent);
     });
     expect(overEvent.preventDefault).not.toHaveBeenCalled();
   });
@@ -150,7 +150,7 @@ describe('useDragSwap', () => {
     );
     const e = createDragEvent();
     act(() => {
-      result.current.onDragEnd(e as unknown as React.DragEvent);
+      result.current.dragHandlers.onDragEnd(e as unknown as React.DragEvent);
     });
     expect((e.currentTarget as any).classList.remove).toHaveBeenCalledWith('dragging');
   });

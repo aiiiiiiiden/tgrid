@@ -1,5 +1,7 @@
+import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { pluginExposeRenderer } from '@electron-forge/plugin-vite/dist/config/vite.base.config';
 
 export default defineConfig((env) => {
@@ -10,10 +12,11 @@ export default defineConfig((env) => {
   const name = forgeConfigSelf?.name ?? '';
 
   return {
-    plugins: [pluginExposeRenderer(name), react()],
+    plugins: [pluginExposeRenderer(name), react(), tailwindcss()],
     resolve: {
       alias: {
-        '@shared': '/src/shared',
+        '@shared': path.resolve(__dirname, 'src/shared'),
+        '@': path.resolve(__dirname, 'src/renderer'),
       },
     },
     clearScreen: false,

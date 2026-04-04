@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 interface GridSelectionState {
   activeIndex: number;
@@ -23,17 +23,20 @@ export function GridSelectionProvider({ children }: { children: React.ReactNode 
   });
 
   const setActiveIndex = useCallback((i: number) => {
-    setState((s) => ({ ...s, activeIndex: i }));
+    setState((s) => s.activeIndex === i ? s : { ...s, activeIndex: i });
   }, []);
 
   const setFullscreenIndex = useCallback((i: number) => {
-    setState((s) => ({ ...s, fullscreenIndex: i }));
+    setState((s) => s.fullscreenIndex === i ? s : { ...s, fullscreenIndex: i });
   }, []);
 
+  const value = useMemo(
+    () => ({ ...state, setActiveIndex, setFullscreenIndex }),
+    [state, setActiveIndex, setFullscreenIndex],
+  );
+
   return (
-    <GridSelectionContext.Provider
-      value={{ ...state, setActiveIndex, setFullscreenIndex }}
-    >
+    <GridSelectionContext.Provider value={value}>
       {children}
     </GridSelectionContext.Provider>
   );

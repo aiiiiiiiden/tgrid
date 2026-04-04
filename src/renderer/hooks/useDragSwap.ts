@@ -1,4 +1,4 @@
-import { useCallback, type DragEvent } from 'react';
+import { useCallback, useMemo, type DragEvent } from 'react';
 
 // Module-level variable to track drag source across components.
 // dataTransfer.getData() returns empty during dragover (browser security).
@@ -29,8 +29,8 @@ export function useDragSwap({ panelIndex, fullscreenIndex, onSwap }: UseDragSwap
     dragSourceIndex = -1;
     (e.currentTarget as HTMLElement).classList.remove('dragging');
     document
-      .querySelectorAll('.panel-header.drag-over')
-      .forEach((h) => h.classList.remove('drag-over'));
+      .querySelectorAll('.panel.drag-over')
+      .forEach((el) => el.classList.remove('drag-over'));
   }, []);
 
   const onDragOver = useCallback(
@@ -58,12 +58,16 @@ export function useDragSwap({ panelIndex, fullscreenIndex, onSwap }: UseDragSwap
     [panelIndex, onSwap],
   );
 
-  return {
-    draggable: true,
-    onDragStart,
-    onDragEnd,
-    onDragOver,
-    onDragLeave,
-    onDrop,
-  };
+  return useMemo(() => ({
+    dragHandlers: {
+      draggable: true as const,
+      onDragStart,
+      onDragEnd,
+    },
+    dropHandlers: {
+      onDragOver,
+      onDragLeave,
+      onDrop,
+    },
+  }), [onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop]);
 }

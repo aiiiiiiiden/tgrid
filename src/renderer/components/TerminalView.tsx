@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 import { useTerminal } from '../hooks/useTerminal';
 
 interface TerminalViewProps {
@@ -7,18 +7,29 @@ interface TerminalViewProps {
   cwd?: string;
   theme: 'dark' | 'light';
   cursorColor?: string | null;
+  onExit?: (exitCode: number) => void;
 }
 
-export default function TerminalView({ ptyId, shell, cwd, theme, cursorColor }: TerminalViewProps) {
-  const termRef = useRef<HTMLDivElement>(null);
-
-  useTerminal(termRef, {
-    ptyId,
-    shell,
-    cwd,
-    theme,
-    cursorColor,
-  });
-
-  return <div ref={termRef} className="terminal-container" />;
+export interface TerminalViewHandle {
+  restart: () => void;
+  focus: () => void;
 }
+
+export default forwardRef<TerminalViewHandle, TerminalViewProps>(
+  function TerminalView({ ptyId, shell, cwd, theme, cursorColor, onExit }, ref) {
+    const termRef = useRef<HTMLDivElement>(null);
+
+    const { restart, focus } = useTerminal(termRef, {
+      ptyId,
+      shell,
+      cwd,
+      theme,
+      cursorColor,
+      onExit,
+    });
+
+    useImperativeHandle(ref, () => ({ restart, focus }), [restart, focus]);
+
+    return <div ref={termRef} className="terminal-container absolute inset-0 overflow-hidden" />;
+  },
+);

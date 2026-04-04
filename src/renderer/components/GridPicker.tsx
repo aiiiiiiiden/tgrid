@@ -1,4 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface GridPickerProps {
   lastGrid: { rows: number; cols: number };
@@ -16,16 +18,11 @@ export default function GridPicker({ lastGrid, onSelect }: GridPickerProps) {
   const displayCols = hoverCols || selectedCols;
   const isHovering = hoverRows > 0;
 
-  useEffect(() => {
-    overlayRef.current?.focus();
-  }, []);
+  useEffect(() => { overlayRef.current?.focus(); }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        window.close();
-        return;
-      }
+      if (e.key === 'Escape') { window.close(); return; }
       if (e.key === 'Enter') {
         if (selectedRows > 0 && selectedCols > 0) onSelect(selectedRows, selectedCols);
         return;
@@ -47,25 +44,17 @@ export default function GridPicker({ lastGrid, onSelect }: GridPickerProps) {
   for (let r = 0; r < 4; r++) {
     for (let c = 0; c < 4; c++) {
       const inDisplay = r < displayRows && c < displayCols;
-      const className = `grid-cell${
-        isHovering && inDisplay
-          ? ' highlighted'
-          : !isHovering && r < selectedRows && c < selectedCols
-            ? ' selected'
-            : ''
-      }`;
       cells.push(
         <div
           key={`${r}-${c}`}
-          className={className}
-          onMouseEnter={() => {
-            setHoverRows(r + 1);
-            setHoverCols(c + 1);
-          }}
-          onClick={() => {
-            setSelectedRows(r + 1);
-            setSelectedCols(c + 1);
-          }}
+          role="button"
+          className={cn(
+            'grid-cell w-10 h-8 bg-muted border border-input rounded-md cursor-pointer transition-[background,border-color] duration-100',
+            isHovering && inDisplay && 'bg-highlight border-primary',
+            !isHovering && r < selectedRows && c < selectedCols && 'bg-highlight border-primary',
+          )}
+          onMouseEnter={() => { setHoverRows(r + 1); setHoverCols(c + 1); }}
+          onClick={() => { setSelectedRows(r + 1); setSelectedCols(c + 1); }}
         />,
       );
     }
@@ -74,38 +63,39 @@ export default function GridPicker({ lastGrid, onSelect }: GridPickerProps) {
   return (
     <div
       ref={overlayRef}
-      className="grid-picker-overlay"
+      className="grid-picker-overlay fixed inset-0 bg-canvas z-[500] flex items-center justify-center"
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      <div className="grid-picker">
-        <h2>Choose Grid Size</h2>
+      <div className="text-center">
+        <h2 className="text-foreground text-base font-medium mb-6">Choose Grid Size</h2>
         <div
-          className="grid-picker-cells"
-          onMouseLeave={() => {
-            setHoverRows(0);
-            setHoverCols(0);
-          }}
+          className="inline-grid grid-cols-4 gap-1.5 mb-5"
+          onMouseLeave={() => { setHoverRows(0); setHoverCols(0); }}
         >
           {cells}
         </div>
-        <div className="grid-picker-info">
+        <div className="text-muted-foreground text-sm mb-4 h-6">
           {displayRows > 0 && displayCols > 0 && (
             <>
-              <span className="size">
+              <span className="text-primary font-semibold">
                 {displayRows} &times; {displayCols}
               </span>{' '}
               &middot; {displayRows * displayCols} agents
             </>
           )}
         </div>
-        <button
-          className="btn btn-primary btn-start"
+        <Button
+          size="default"
+          className="px-6"
           disabled={selectedRows <= 0 || selectedCols <= 0}
           onClick={() => onSelect(selectedRows, selectedCols)}
         >
           Start
-        </button>
+        </Button>
+        <p className="text-ghost text-[10px] mt-4">
+          Arrow keys to select &middot; Enter to start
+        </p>
       </div>
     </div>
   );

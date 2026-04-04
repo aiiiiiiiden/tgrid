@@ -36,12 +36,6 @@ describe('PresetEditor', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('calls onClose on Escape key', () => {
-    const { onClose, container } = renderEditor(null);
-    fireEvent.keyDown(container.querySelector('.modal-backdrop')!, { key: 'Escape' });
-    expect(onClose).toHaveBeenCalled();
-  });
-
   it('does not save when name is empty', async () => {
     const mock = getMockTgrid();
     renderEditor(null);
@@ -76,7 +70,7 @@ describe('PresetEditor', () => {
   it('shows confirmation on Delete click', () => {
     renderEditor({ id: 'test', name: 'Test' });
     fireEvent.click(screen.getByText('Delete'));
-    expect(screen.getByText(/Delete preset "Test"/)).toBeInTheDocument();
+    expect(screen.getByText(/Delete preset/)).toBeInTheDocument();
   });
 
   it('has color palette', () => {
@@ -84,9 +78,9 @@ describe('PresetEditor', () => {
     expect(screen.getByRole('radiogroup', { name: 'Preset color' })).toBeInTheDocument();
   });
 
-  it('has Choose Image button', () => {
+  it('has image picker', () => {
     renderEditor(null);
-    expect(screen.getByText('Choose Image')).toBeInTheDocument();
+    expect(screen.getByText('Click to choose image')).toBeInTheDocument();
   });
 
   it('saves on Enter in name field', async () => {

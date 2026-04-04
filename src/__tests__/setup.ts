@@ -34,6 +34,7 @@ vi.mock('@xterm/xterm', () => ({
     onResize: vi.fn().mockReturnValue({ dispose: vi.fn() }),
     loadAddon: vi.fn(),
     refresh: vi.fn(),
+    focus: vi.fn(),
     rows: 24,
     options: { theme: {} },
   })),
