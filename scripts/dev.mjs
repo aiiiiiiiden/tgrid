@@ -6,6 +6,7 @@
 import { spawn } from 'node:child_process';
 import { createServer, build } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,9 +17,12 @@ async function main() {
   // 1. Start Vite dev server for renderer
   const viteServer = await createServer({
     root,
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     resolve: {
-      alias: { '@shared': path.join(root, 'src/shared') },
+      alias: {
+        '@shared': path.join(root, 'src/shared'),
+        '@': path.join(root, 'src/renderer'),
+      },
     },
     clearScreen: false,
   });
@@ -83,7 +87,8 @@ async function main() {
 
   // 3. Launch Electron
   const electronPath = path.join(root, 'node_modules/.bin/electron');
-  const electron = spawn(electronPath, ['.'], {
+  const extraArgs = process.argv.slice(2);
+  const electron = spawn(electronPath, ['.', ...extraArgs], {
     cwd: root,
     stdio: ['ignore', 'inherit', 'inherit'],
     env: { ...process.env },

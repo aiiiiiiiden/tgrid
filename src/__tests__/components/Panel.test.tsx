@@ -11,7 +11,7 @@ function PanelWithProviders(props: {
   isActive?: boolean;
   isFullscreen?: boolean;
   isHidden?: boolean;
-  onActivate?: () => void;
+  onActivate?: (index: number) => void;
   onSwap?: (s: number, t: number) => void;
 }) {
   return (
@@ -32,14 +32,14 @@ function PanelWithProviders(props: {
 }
 
 describe('Panel', () => {
-  it('renders with terminal label', () => {
+  it('renders with panel label', () => {
     render(<PanelWithProviders index={0} />);
-    expect(screen.getByLabelText('Terminal 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Panel 1')).toBeInTheDocument();
   });
 
-  it('renders panel name as "Terminal N" when no preset', () => {
+  it('renders panel name as "Panel N" when no preset', () => {
     render(<PanelWithProviders index={2} />);
-    expect(screen.getByText('Terminal 3')).toBeInTheDocument();
+    expect(screen.getByText('Panel 3')).toBeInTheDocument();
   });
 
   it('shows keyboard shortcut for panels 1-9', () => {
@@ -63,21 +63,23 @@ describe('Panel', () => {
     expect(container.querySelector('.panel.fullscreen')).toBeInTheDocument();
   });
 
-  it('returns null when hidden', () => {
+  it('hides panel with display:none when hidden', () => {
     const { container } = render(<PanelWithProviders index={0} isHidden />);
-    expect(container.querySelector('.panel')).not.toBeInTheDocument();
+    const panel = container.querySelector('.panel');
+    expect(panel).toBeInTheDocument();
+    expect(panel).toHaveClass('hidden');
   });
 
   it('calls onActivate on mousedown', () => {
     const onActivate = vi.fn();
     render(<PanelWithProviders index={0} onActivate={onActivate} />);
-    fireEvent.mouseDown(screen.getByLabelText('Terminal 1'));
+    fireEvent.mouseDown(screen.getByLabelText('Panel 1'));
     expect(onActivate).toHaveBeenCalled();
   });
 
-  it('has menu button with aria-label', () => {
+  it('has preset indicator with aria-label', () => {
     render(<PanelWithProviders index={0} />);
-    expect(screen.getByLabelText('Panel options')).toBeInTheDocument();
+    expect(screen.getByLabelText('Assign preset')).toBeInTheDocument();
   });
 
   it('does not show onboarding hint', () => {

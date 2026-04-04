@@ -76,10 +76,10 @@ describe('Grid', () => {
     });
   });
 
-  it('labels panels with Terminal N', () => {
+  it('labels panels with Panel N', () => {
     render(<GridWithState rows={1} cols={3} panelCwds={{}} onSwap={onSwap} />);
-    expect(screen.getByLabelText('Terminal 1')).toBeInTheDocument();
-    expect(screen.getByLabelText('Terminal 2')).toBeInTheDocument();
-    expect(screen.getByLabelText('Terminal 3')).toBeInTheDocument();
+    expect(screen.getByLabelText('Panel 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Panel 2')).toBeInTheDocument();
+    expect(screen.getByLabelText('Panel 3')).toBeInTheDocument();
   });
 });

@@ -6,6 +6,27 @@ import * as pty from 'node-pty';
 import type { BrowserWindow } from 'electron';
 
 const ptys = new Map<string, pty.IPty>();
+let currentTheme: 'dark' | 'light' = 'dark';
+
+// OSC 10 sets foreground, OSC 11 sets background color.
+// CLI tools (vim, bat, delta, etc.) query OSC 11 to detect dark/light — no visible output in terminal.
+const THEME_COLORS = {
+  dark:  { fg: '#cccdcc', bg: '#141514' },
+  light: { fg: '#3e3e3e', bg: '#fafafa' },
+} as const;
+
+export function setTheme(theme: 'dark' | 'light'): void {
+  const changed = currentTheme !== theme;
+  currentTheme = theme;
+  if (changed) {
+    const { fg, bg } = THEME_COLORS[theme];
+    for (const [, p] of ptys) {
+      try {
+        p.write(`\x1b]10;${fg}\x07\x1b]11;${bg}\x07`);
+      } catch { /* PTY may have exited */ }
+    }
+  }
+}
 
 export function getPtys(): Map<string, pty.IPty> {
   return ptys;
@@ -62,12 +83,25 @@ export function createPty(
   let startDir = cwd || os.homedir();
   if (!fs.existsSync(startDir)) startDir = os.homedir();
 
+  const env = { ...process.env } as Record<string, string>;
+  env.TERM = 'xterm-256color';
+  env.COLORFGBG = currentTheme === 'light' ? '0;15' : '15;0';
+  env.TERM_BACKGROUND = currentTheme;
+
+  // Ensure UTF-8 locale for CJK input (Korean, Japanese, Chinese)
+  if (!env.LANG || !env.LANG.includes('UTF-8')) {
+    env.LANG = 'en_US.UTF-8';
+  }
+  if (!env.LC_ALL) {
+    env.LC_ALL = 'en_US.UTF-8';
+  }
+
   const p = pty.spawn(shell, [], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
     cwd: startDir,
-    env: { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
+    env,
   });
 
   ptys.set(id, p);
@@ -83,9 +117,9 @@ export function createPty(
   });
 
   p.onExit(({ exitCode }: { exitCode: number }) => {
-    if (ptys.get(id) === p) {
-      ptys.delete(id);
-    }
+    // Only notify for the current PTY — ignore exits from replaced instances (e.g., React StrictMode)
+    if (ptys.get(id) !== p) return;
+    ptys.delete(id);
     try {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('pty-exit', { id, exitCode });

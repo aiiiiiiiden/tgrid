@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import type { Preset, TGridConfig } from '../../shared/types';
 
 interface PresetState {
@@ -56,17 +56,20 @@ export function PresetProvider({ children }: { children: React.ReactNode }) {
     [state.imageCache],
   );
 
+  const value = useMemo(
+    () => ({
+      ...state,
+      setPresets,
+      setAssignments,
+      setConfig,
+      cacheImage,
+      getCachedImage,
+    }),
+    [state, setPresets, setAssignments, setConfig, cacheImage, getCachedImage],
+  );
+
   return (
-    <PresetContext.Provider
-      value={{
-        ...state,
-        setPresets,
-        setAssignments,
-        setConfig,
-        cacheImage,
-        getCachedImage,
-      }}
-    >
+    <PresetContext.Provider value={value}>
       {children}
     </PresetContext.Provider>
   );

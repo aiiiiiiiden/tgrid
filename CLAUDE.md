@@ -6,69 +6,86 @@ tgrid is an Electron-based terminal grid manager for AI agents. It arranges mult
 
 ## Architecture
 
-Single-window Electron app composed of a main process and a renderer process.
+Single-window Electron app: main process (PTY/config), preload (IPC bridge), renderer (React UI), shared types.
 
-### Main Process (`src/main.js`)
-- PTY lifecycle management (spawn, write, resize, kill via node-pty)
-- Config file read/write (`~/.tgrid/config.json`)
-- Session save/restore (`~/.tgrid/session.json`)
-- Character image loading (file → data URL conversion)
-- Native dialogs (image picker)
-- Global shortcut registration (`Cmd/Ctrl+1-9`, `Cmd/Ctrl+Arrow`, `Cmd/Ctrl+Enter`)
+### Main Process (`src/main/`)
+- `main.ts` — Window creation, IPC handlers, global shortcuts (`Cmd/Ctrl+1-9`, `Cmd/Ctrl+Arrow`, `Cmd/Ctrl+Enter`), preset pack installer
+- `pty-manager.ts` — node-pty lifecycle, shell resolution, cwd detection (lsof on macOS, /proc on Linux)
+- `config.ts` — Config/session persistence (`~/.tgrid/config.json`, `~/.tgrid/session.json`)
+- `image-loader.ts` — Image path expansion (~), MIME detection, base64 encoding, file picker dialog
 
-### Renderer Process (`src/renderer.js`)
-- Grid UI creation and management
-- xterm.js terminal instance management
-- Preset system (dropdown menus, modal editor)
-- Character image overlay rendering
-- Drag & drop to swap preset assignments between panels
-- Grid picker (on first launch) and runtime resize
+### Preload Bridge (`src/preload/preload.ts`)
+- Context-isolated IPC bridge with hard-coded channel whitelists
+- Three channel types: HANDLE (invoke), LISTENER (send), PUSH (main→renderer events)
+- Throws on unknown channel access — no wildcard/dynamic channels
 
-### IPC Communication
-Main ↔ renderer communication uses the `ipcMain.handle`/`ipcRenderer.invoke` pattern:
-- `create-pty`, `pty-write`, `pty-resize`, `pty-kill` — PTY control
-- `get-presets`, `save-preset`, `delete-preset` — Preset CRUD
-- `get-assignments`, `set-assignment`, `swap-assignments` — Panel-preset mapping
-- `grid-selected`, `resize-grid` — Grid size changes
-- `load-image`, `pick-image` — Image management
-- `restore-assignments` — Session restore
+### Renderer (`src/renderer/`)
+- `App.tsx` — App shell orchestrating grid picker / session restore / running states
+- `index.tsx` — React entry point with StrictMode
+- **Components** (`components/`): Grid, Panel, TerminalView, AgentOverlay, GridPicker, GridResizeDropdown, PresetDropdown, PresetEditor
+- **Contexts** (`context/`): GridLayoutContext (dimensions), GridSelectionContext (active/fullscreen), PresetContext (presets/assignments/image cache), ThemeContext (dark/light), GridContext (composite provider)
+- **Hooks** (`hooks/`): useTerminal, useIpc, useDragSwap, useDropdownPosition, useImageLoader
+- **Utils** (`utils/`): colors, ptyMap
+- **Styles** (`styles/`): index.css, themes.css
+
+### Shared (`src/shared/types.ts`)
+- Full IPC type definitions: Preset, TGridConfig, SessionData, IpcHandleChannels, IpcListenerChannels, IpcPushEvents
+
+### IPC Channels
+**Handle** (request/reply): `create-pty`, `get-presets`, `save-preset`, `delete-preset`, `get-assignments`, `set-assignment`, `swap-assignments`, `restore-assignments`, `grid-selected`, `resize-grid`, `load-image`, `pick-image`, `set-theme`, `install-preset-pack`
+
+**Listener** (fire-and-forget): `pty-write`, `pty-resize`
+
+**Push** (main→renderer): `pty-data`, `pty-exit`, `init`, `restore-session`, `show-grid-picker`, `focus-panel`, `focus-direction`, `toggle-fullscreen`
 
 ## Key Conventions
 
-- **nodeIntegration: true, contextIsolation: false** — Renderer uses `require()` directly
+- **contextIsolation: true, nodeIntegration: false** — Strict security via preload bridge (`window.tgrid`)
 - **Preset IDs** — Auto-generated name-based slugs (`generatePresetId`)
 - **Image paths** — Stored under `~/.tgrid/characters/`, tilde (`~`) paths supported
 - **PTY IDs** — Format `pty-{index}` (e.g., `pty-0`, `pty-1`)
 - **Session restore** — Previous session auto-restores on launch; hold `Shift` to skip
+- **Path aliases** — `@shared` → `src/shared` (configured in all Vite configs)
 
 ## Build & Run
 
 ```bash
 npm install          # Install deps + rebuild native modules
-npm start            # Dev run
-npm run dist:mac     # macOS release build
-npm run dist:win     # Windows release build
-npm run dist:linux   # Linux release build
+npm run dev          # Dev run (Vite dev server + Electron)
+npm test             # Run tests (Vitest)
+npm run test:watch   # Watch mode
+npm run dist         # Build for current platform
+npm run dist:mac     # macOS release build (.zip)
+npm run dist:win     # Windows release build (Squirrel)
+npm run dist:linux   # Linux release build (.deb)
 ```
 
 ## File Layout
 
 ```
-src/main.js       — Electron main process (455 lines)
-src/renderer.js   — Renderer process UI logic (1070 lines)
-src/index.html    — HTML layout + CSS styles
-src/preload.js    — Preload (minimal, 3 lines)
-scripts/build.sh  — Release build script
-build/icon.png    — App icon
+src/
+├── main/            — Electron main process (main.ts, pty-manager.ts, config.ts, image-loader.ts)
+├── preload/         — Context-isolated IPC bridge (preload.ts)
+├── renderer/        — React UI (App.tsx, components/, context/, hooks/, utils/, styles/)
+├── shared/          — Shared IPC type definitions (types.ts)
+└── __tests__/       — 24 test files (components, contexts, hooks, main, utils)
+resources/
+├── icon.*           — App icons (svg, png, icns, ico)
+├── hagrid.svg       — Hagrid character vector graphic
+└── presets/         — Bundled preset packs (harry-potter/)
+scripts/
+├── dev.mjs          — Dev server orchestration
+└── build.sh         — Release build script
 ```
 
 ## Style Notes
 
-- Plain JavaScript (no TypeScript)
-- Vanilla DOM manipulation, no frameworks
-- CSS is inlined in `<style>` tag within `index.html`
-- Color theme: dark background (`#0a0a0f`), cyan accent (`#00d4ff`)
-- All UI components (dropdowns, modals, grid picker) are dynamically created in JS
+- TypeScript + React 19
+- CSS variables for theming (dark/light) in `themes.css`
+- Design system documented in `DESIGN.md` -- all visual decisions reference this file
+- Green-tinted neutrals with `#4ade80` accent
+- UI chrome uses system sans-serif; terminal uses system monospace (see DESIGN.md Typography)
+- Components are React functional components with context-based state management
 
 ## Skill routing
 

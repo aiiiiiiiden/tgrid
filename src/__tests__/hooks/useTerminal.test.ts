@@ -4,7 +4,7 @@ import { getTermTheme } from '../../renderer/hooks/useTerminal';
 describe('getTermTheme', () => {
   it('returns dark theme for "dark"', () => {
     const theme = getTermTheme('dark');
-    expect(theme.background).toBe('#141414');
+    expect(theme.background).toBe('#141514');
     expect(theme.cursor).toBe('#4ade80');
   });
 

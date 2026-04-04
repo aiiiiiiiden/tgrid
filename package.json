@@ -1,7 +1,7 @@
 {
   "name": "tgrid",
   "productName": "tgrid",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AI Agent Terminal Grid Manager with character image overlays",
   "main": ".vite/build/main.js",
   "private": true,
@@ -31,8 +31,13 @@
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "electron-squirrel-startup": "^1.0.1",
-    "node-pty": "^1.1.0"
+    "lucide-react": "^1.7.0",
+    "node-pty": "^1.1.0",
+    "radix-ui": "^1.4.3",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
@@ -44,6 +49,7 @@
     "@electron-forge/plugin-vite": "^7.11.1",
     "@electron/fuses": "^1.8.0",
     "@electron/rebuild": "^3.7.2",
+    "@tailwindcss/vite": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
@@ -53,6 +59,7 @@
     "jsdom": "^25.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "tailwindcss": "^4.2.2",
     "typescript": "^5.5.0",
     "vite": "^5.4.0",
     "vitest": "^2.0.0"

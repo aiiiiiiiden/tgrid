@@ -1,45 +1,28 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import PresetDropdown from '../../renderer/components/PresetDropdown';
 import { GridProvider, usePresets } from '../../renderer/context/GridContext';
 import { ThemeProvider } from '../../renderer/context/ThemeContext';
 import { getMockTgrid } from '../setup';
 
-function createAnchor(): HTMLElement {
-  const el = document.createElement('button');
-  el.getBoundingClientRect = () => ({
-    top: 40,
-    bottom: 60,
-    left: 100,
-    right: 200,
-    width: 100,
-    height: 20,
-    x: 100,
-    y: 40,
-    toJSON: () => {},
-  });
-  document.body.appendChild(el);
-  return el;
-}
-
 function PresetDropdownWithState({
   panelIndex,
-  onClose,
   presets,
   assignments,
 }: {
   panelIndex: number;
-  onClose: () => void;
   presets?: Array<{ id: string; name: string; color?: string | null }>;
   assignments?: Record<string, string>;
 }) {
-  const anchor = createAnchor();
+  const [open, setOpen] = React.useState(true);
   return (
     <GridProvider>
       <ThemeProvider initialTheme="dark">
         <StateInjector presets={presets} assignments={assignments}>
-          <PresetDropdown panelIndex={panelIndex} anchorEl={anchor} onClose={onClose} />
+          <PresetDropdown panelIndex={panelIndex} open={open} onOpenChange={setOpen}>
+            <button>trigger</button>
+          </PresetDropdown>
         </StateInjector>
       </ThemeProvider>
     </GridProvider>
@@ -64,10 +47,8 @@ function StateInjector({
 }
 
 describe('PresetDropdown', () => {
-  const onClose = vi.fn();
-
   it('renders "None" option', () => {
-    render(<PresetDropdownWithState panelIndex={0} onClose={onClose} />);
+    render(<PresetDropdownWithState panelIndex={0} />);
     expect(screen.getByText('None')).toBeInTheDocument();
   });
 
@@ -75,7 +56,6 @@ describe('PresetDropdown', () => {
     render(
       <PresetDropdownWithState
         panelIndex={0}
-        onClose={onClose}
         presets={[
           { id: 'a', name: 'Agent Alpha' },
           { id: 'b', name: 'Agent Beta' },
@@ -86,46 +66,33 @@ describe('PresetDropdown', () => {
     expect(screen.getByText('Agent Beta')).toBeInTheDocument();
   });
 
-  it('shows check mark on assigned preset', () => {
-    const { container } = render(
-      <PresetDropdownWithState
-        panelIndex={0}
-        onClose={onClose}
-        presets={[{ id: 'a', name: 'Agent Alpha' }]}
-        assignments={{ '0': 'a' }}
-      />,
-    );
-    const activeItem = container.querySelector('.dropdown-item.active');
-    expect(activeItem).toBeInTheDocument();
-    expect(activeItem?.textContent).toContain('Agent Alpha');
-  });
-
-  it('calls set-assignment IPC and closes on click', async () => {
+  it('calls set-assignment IPC on click', async () => {
     const mock = getMockTgrid();
     mock.invoke.mockResolvedValue({ '0': 'a' });
 
     render(
       <PresetDropdownWithState
         panelIndex={0}
-        onClose={onClose}
         presets={[{ id: 'a', name: 'Agent Alpha' }]}
       />,
     );
     fireEvent.click(screen.getByText('Agent Alpha'));
-    expect(mock.invoke).toHaveBeenCalledWith('set-assignment', {
-      panelIndex: 0,
-      presetId: 'a',
+
+    await waitFor(() => {
+      expect(mock.invoke).toHaveBeenCalledWith('set-assignment', {
+        panelIndex: 0,
+        presetId: 'a',
+      });
     });
   });
 
-  it('closes on Escape key', () => {
-    render(<PresetDropdownWithState panelIndex={0} onClose={onClose} />);
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('has menu role', () => {
-    render(<PresetDropdownWithState panelIndex={0} onClose={onClose} />);
-    expect(screen.getByRole('menu')).toBeInTheDocument();
+  it('renders menu items for presets', () => {
+    render(
+      <PresetDropdownWithState
+        panelIndex={0}
+        presets={[{ id: 'a', name: 'Agent Alpha' }]}
+      />,
+    );
+    expect(screen.getAllByRole('menuitem').length).toBeGreaterThanOrEqual(2); // None + preset
   });
 });

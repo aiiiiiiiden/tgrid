@@ -4,12 +4,12 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
 const DARK_TERM_THEME = {
-  background: '#141414',
-  foreground: '#cccccc',
+  background: '#141514',
+  foreground: '#cccdcc',
   cursor: '#4ade80',
-  cursorAccent: '#141414',
+  cursorAccent: '#141514',
   selectionBackground: 'rgba(74, 222, 128, 0.2)',
-  black: '#141414',
+  black: '#141514',
   red: '#f87171',
   green: '#4ade80',
   yellow: '#fbbf24',
@@ -55,12 +55,20 @@ export function getTermTheme(theme: 'dark' | 'light') {
   return theme === 'light' ? LIGHT_TERM_THEME : DARK_TERM_THEME;
 }
 
+function hexToSelectionBg(hex: string, opacity: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
 interface UseTerminalOptions {
   ptyId: string;
   shell?: string;
   cwd?: string;
   theme: 'dark' | 'light';
   cursorColor?: string | null;
+  onExit?: (exitCode: number) => void;
 }
 
 export function useTerminal(
@@ -70,6 +78,7 @@ export function useTerminal(
   terminal: Terminal | null;
   fitAddon: FitAddon | null;
   isReady: boolean;
+  restart: () => void;
 } {
   const [isReady, setIsReady] = useState(false);
   const terminalRef = useRef<Terminal | null>(null);
@@ -79,6 +88,8 @@ export function useTerminal(
   const fitDebounceRef = useRef(0);
   const ptyIdRef = useRef(options.ptyId);
   ptyIdRef.current = options.ptyId;
+  const onExitRef = useRef(options.onExit);
+  onExitRef.current = options.onExit;
 
   const debouncedFit = useCallback(() => {
     if (fitDebounceRef.current) return;
@@ -99,11 +110,14 @@ export function useTerminal(
 
     const termTheme = getTermTheme(options.theme);
     const cursorColor = options.cursorColor || termTheme.cursor;
+    const selectionBg = options.cursorColor
+      ? hexToSelectionBg(options.cursorColor, options.theme === 'light' ? 0.15 : 0.2)
+      : termTheme.selectionBackground;
 
     const terminal = new Terminal({
       fontSize: 13,
       fontFamily: "'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace",
-      theme: { ...termTheme, cursor: cursorColor },
+      theme: { ...termTheme, cursor: cursorColor, selectionBackground: selectionBg },
       allowTransparency: true,
       cursorBlink: true,
       scrollback: 5000,
@@ -174,6 +188,7 @@ export function useTerminal(
     const unsubExit = window.tgrid.on<'pty-exit'>('pty-exit', ({ id, exitCode }) => {
       if (id === ptyIdRef.current && !disposedRef.current) {
         terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m`);
+        onExitRef.current?.(exitCode);
       }
     });
 
@@ -214,7 +229,10 @@ export function useTerminal(
     if (!terminal) return;
     const termTheme = getTermTheme(options.theme);
     const cursorColor = options.cursorColor || termTheme.cursor;
-    terminal.options.theme = { ...termTheme, cursor: cursorColor };
+    const selectionBg = options.cursorColor
+      ? hexToSelectionBg(options.cursorColor, options.theme === 'light' ? 0.15 : 0.2)
+      : termTheme.selectionBackground;
+    terminal.options.theme = { ...termTheme, cursor: cursorColor, selectionBackground: selectionBg };
     const el = ref.current;
     if (el) {
       const viewport = el.querySelector('.xterm-viewport') as HTMLElement;
@@ -223,9 +241,30 @@ export function useTerminal(
     terminal.refresh(0, terminal.rows - 1);
   }, [options.theme, options.cursorColor, ref]);
 
+  const restart = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal || disposedRef.current) return;
+    const ptyId = ptyIdRef.current;
+    window.tgrid
+      .invoke('create-pty', {
+        id: ptyId,
+        shellOverride: options.shell,
+        cwd: options.cwd,
+      })
+      .catch((err: Error) => {
+        terminal.writeln(`\x1b[31mFailed to restart: ${err.message}\x1b[0m`);
+      });
+  }, [options.shell, options.cwd]);
+
+  const focus = useCallback(() => {
+    terminalRef.current?.focus();
+  }, []);
+
   return {
     terminal: terminalRef.current,
     fitAddon: fitAddonRef.current,
     isReady,
+    restart,
+    focus,
   };
 }
